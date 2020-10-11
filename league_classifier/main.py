@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
 
+
 def initialize_parameters(dim):
     """
     Initialize weights vector w and bias (scalar) b with 0's.
@@ -15,6 +16,7 @@ def initialize_parameters(dim):
     :return b: bias (scalar)
     """
     return np.zeros((dim, 1)), 0
+
 
 def propagate(w, b, X, Y):
     """
@@ -38,7 +40,8 @@ def propagate(w, b, X, Y):
 
     return cost, dJdw, dJdb
 
-def optimize(w, b, X, Y, num_iterations, learning_rate, print_cost = False):
+
+def optimize(w, b, X, Y, num_iterations, learning_rate, print_cost=False):
     """
     Run gradient descent for num_iterations to optimize the parameters w and b.
     :param w: initial weights
@@ -62,41 +65,93 @@ def optimize(w, b, X, Y, num_iterations, learning_rate, print_cost = False):
 
     return w, b
 
-def predict(w, b, X):
+
+def binary_predict(w, b, X):
     """
-    Calculate predicted labels given the weights, bias, and input data.
+    Calculate predicted labels given weights, bias, and input data.
     :param w: weights
     :param b: bias
     :param X: input data
     :return Y_prediction: predicted labels
     """
-    m = X.shape[1]
     A = sigmoid(np.dot(w.T, X) + b)
     Y_prediction = (A > 0.5).astype(int)
 
     return Y_prediction
 
-def model(train_X, train_Y, test_X, test_Y, num_iterations, learning_rate, print_cost = False):
-    """
 
-    :param X_train:
-    :param Y_train:
-    :param X_test:
-    :param Y_test:
-    :param num_iterations:
-    :param learning_rate:
-    :param print_cost:
-    :return:
+def multi_class_predict(w_aggregate, b_aggregate, X):
+    """
+    Calculate multi-class predicted labels given weights, bias, and input data.
+    :param w_aggregate: weights vectors for all K binary classifiers stacked together, shape n x K
+    :param b_aggregate: bias units for all K binary classifiers stacked together, shape K x 1
+    :param X: input data, shape n x m
+    :return Y_prediction: predicted labels, shape 1 x m
+    """
+    # activations from all K classifiers stacked together, shape K x m
+    A_aggregate = sigmoid(np.dot(w_aggregate.T, X) + b_aggregate)
+    Y_prediction = np.argmax(A_aggregate, axis=0) + 1
+    Y_prediction = np.reshape(Y_prediction, (1, Y_prediction.size))
+
+    return Y_prediction
+
+
+def binary_model(train_X, train_Y, test_X, test_Y, num_iterations, learning_rate, print_cost=False):
+    """
+    Learn a binary classifier and test its accuracy on the test set.
+    :param train_X: training data, shape n x m_train
+    :param train_Y: training labels (binary 0 or 1), shape 1 x m_train
+    :param test_X: test data, shape n x m_test
+    :param test_Y: test labels (binary 0 or 1), shape 1 x m_test
+    :param num_iterations: number of iterations to run gradient descent
+    :param learning_rate: learning rate (alpha)
+    :param print_cost: print calculated cost every 100 iterations for tracking progress
     """
     n = train_X.shape[0]
     w, b = initialize_parameters(n)
     w, b = optimize(w, b, train_X, train_Y, num_iterations, learning_rate, print_cost)
 
-    Y_prediction_train = predict(w, b, train_X)
-    Y_prediction_test = predict(w, b, test_X)
+    Y_prediction_train = binary_predict(w, b, train_X)
+    Y_prediction_test = binary_predict(w, b, test_X)
 
     print(f"Training set prediction accuracy: {100 - np.mean(np.abs(train_Y - Y_prediction_train)) * 100}%")
     print(f"Test set prediction accuracy: {100 - np.mean(np.abs(test_Y - Y_prediction_test)) * 100}%")
+
+
+def multi_class_model(num_classes, train_X, train_Y, test_X, test_Y, num_iterations, learning_rate, print_cost=False):
+    """
+    Learn a multi-class classifier and test its accuracy on the test set.
+    :param num_classes: number of distinct classes (K)
+    :param train_X: training data, shape n x m_train
+    :param train_Y: training labels (multi-class 1 to K), shape 1 x m_train
+    :param test_X: test data, shape n x m_test
+    :param test_Y: test labels (multi-class 1 to K), shape 1 x m_test
+    :param num_iterations: number of iterations to run gradient descent
+    :param learning_rate: learning rate (alpha)
+    :param print_cost: print calculated cost every 100 iterations for tracking progress
+    """
+    n = train_X.shape[0]
+    m_train = train_X.shape[1]
+    m_test = test_X.shape[1]
+    w_aggregate = np.zeros((n, num_classes))  # weights vectors for all K binary classifiers stacked together
+    b_aggregate = np.zeros((num_classes, 1))  # bias units for all K binary classifiers stacked together
+
+    for k in range(1, num_classes + 1):
+        print(f"Training classifier for league {k}")
+        train_Y_k = (train_Y == k).astype(int)
+        w, b = initialize_parameters(n)
+        w, b = optimize(w, b, train_X, train_Y_k, num_iterations, learning_rate, print_cost)
+        w_aggregate[:, k - 1] = np.reshape(w, (n,))
+        b_aggregate[k - 1, 0] = b
+
+    Y_prediction_train = multi_class_predict(w_aggregate, b_aggregate, train_X)
+    Y_prediction_test = multi_class_predict(w_aggregate, b_aggregate, test_X)
+
+    print("Predicted Y for test set:")
+    print(Y_prediction_test)
+
+    print(f"Training set prediction accuracy: {sum((Y_prediction_train == train_Y).squeeze().astype(int)) / m_train * 100}%")
+    print(f"Test set prediction accuracy: {sum((Y_prediction_test == test_Y).squeeze().astype(int)) / m_test * 100}%")
 
 
 train_data = pd.read_csv("data/train_rows.csv")
@@ -104,11 +159,9 @@ test_data = pd.read_csv("data/test_rows.csv")
 all_data = pd.concat([train_data, test_data])
 num_train_rows = train_data.shape[0]
 
-# train Bronze League classifier
 all_Y = np.reshape(np.array(all_data["LeagueIndex"]), (1, -1))
-all_Y = (all_Y == 1).astype(int)
-train_Y = all_Y[:, :num_train_rows]  # shape 1 x m_train
-test_Y = all_Y[:, num_train_rows:]  # shape 1 x m_test
+train_data_Y = all_Y[:, :num_train_rows]  # shape 1 x m_train
+test_data_Y = all_Y[:, num_train_rows:]  # shape 1 x m_test
 
 # remove useless columns and scale data
 del all_data["Unnamed: 0"]
@@ -116,7 +169,7 @@ del all_data["GameID"]
 del all_data["LeagueIndex"]
 all_X = np.array(all_data).T
 all_X = StandardScaler().fit_transform(all_X)
-train_X = all_X[:, :num_train_rows]  # shape n x m_train
-test_X = all_X[:, num_train_rows:]  # shape n x m_test
+train_data_X = all_X[:, :num_train_rows]  # shape n x m_train
+test_data_X = all_X[:, num_train_rows:]  # shape n x m_test
 
-model(train_X, train_Y, test_X, test_Y, 1000, 0.1, True)
+multi_class_model(7, train_data_X, train_data_Y, test_data_X, test_data_Y, 30000, 0.1, True)
