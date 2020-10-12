@@ -32,6 +32,12 @@ def propagate(w, b, X, Y):
     m = X.shape[1]
 
     A = sigmoid(np.dot(w.T, X) + b)  # shape 1 x m
+
+    # to prevent log(0) errors
+    epsilon = 1e-8
+    A[A == 0] = epsilon
+    A[A == 1] = 1 - epsilon
+
     cost = -1/m * (np.dot(Y, np.log(A).T) + np.dot(1 - Y, np.log(1 - A).T))
     cost = np.squeeze(cost)
 
@@ -156,20 +162,29 @@ def multi_class_model(num_classes, train_X, train_Y, test_X, test_Y, num_iterati
 
 train_data = pd.read_csv("data/train_rows.csv")
 test_data = pd.read_csv("data/test_rows.csv")
-all_data = pd.concat([train_data, test_data])
-num_train_rows = train_data.shape[0]
 
-all_Y = np.reshape(np.array(all_data["LeagueIndex"]), (1, -1))
-train_data_Y = all_Y[:, :num_train_rows]  # shape 1 x m_train
-test_data_Y = all_Y[:, num_train_rows:]  # shape 1 x m_test
+train_data_Y = np.reshape(np.array(train_data["LeagueIndex"]), (1, -1))  # shape 1 x m_train
+test_data_Y = np.reshape(np.array(test_data["LeagueIndex"]), (1, -1))  # shape 1 x m_test
 
-# remove useless columns and scale data
-del all_data["Unnamed: 0"]
-del all_data["GameID"]
-del all_data["LeagueIndex"]
-all_X = np.array(all_data).T
-all_X = StandardScaler().fit_transform(all_X)
-train_data_X = all_X[:, :num_train_rows]  # shape n x m_train
-test_data_X = all_X[:, num_train_rows:]  # shape n x m_test
+# remove useless columns
+del train_data["Unnamed: 0"]
+del train_data["GameID"]
+del train_data["LeagueIndex"]
+del test_data["Unnamed: 0"]
+del test_data["GameID"]
+del test_data["LeagueIndex"]
 
-multi_class_model(7, train_data_X, train_data_Y, test_data_X, test_data_Y, 30000, 0.1, True)
+train_data_X = np.array(train_data)
+test_data_X = np.array(test_data)
+
+# scale data
+scaler = StandardScaler()
+train_data_X = scaler.fit_transform(train_data_X)
+test_data_X = scaler.transform(test_data_X)
+
+train_data_X = train_data_X.T  # shape n x m_train
+test_data_X = test_data_X.T  # shape n x m_test
+
+num_leagues = 7
+
+multi_class_model(num_leagues, train_data_X, train_data_Y, test_data_X, test_data_Y, 100000, 1, True)

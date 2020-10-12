@@ -83,6 +83,12 @@ def compute_cost(AL, Y):
     :return cost: cost
     """
     m = Y.shape[1]
+
+    # to prevent log(0) errors
+    epsilon = 1e-8
+    AL[AL == 0] = epsilon
+    AL[AL == 1] = 1 - epsilon
+
     return -1/m * np.sum(Y * np.log(AL) + (1 - Y) * np.log(1 - AL)).squeeze()
 
 
@@ -210,21 +216,30 @@ def binary_model(layer_dims, train_X, train_Y, test_X, test_Y, num_iterations, l
 
 train_data = pd.read_csv("data/train_rows.csv")
 test_data = pd.read_csv("data/test_rows.csv")
-all_data = pd.concat([train_data, test_data])
-num_train_rows = train_data.shape[0]
 
-all_Y = np.reshape(np.array(all_data["LeagueIndex"]), (1, -1))
-all_Y = (all_Y == 3).astype(int)
-train_data_Y = all_Y[:, :num_train_rows]  # shape 1 x m_train
-test_data_Y = all_Y[:, num_train_rows:]  # shape 1 x m_test
+league = 4
+train_data_Y = np.reshape(np.array(train_data["LeagueIndex"]), (1, -1))  # shape 1 x m_train
+train_data_Y = (train_data_Y == league).astype(int)
+test_data_Y = np.reshape(np.array(test_data["LeagueIndex"]), (1, -1))  # shape 1 x m_test
+test_data_Y = (test_data_Y == league).astype(int)
 
-# remove useless columns and scale data
-del all_data["Unnamed: 0"]
-del all_data["GameID"]
-del all_data["LeagueIndex"]
-all_X = np.array(all_data).T
-all_X = StandardScaler().fit_transform(all_X)
-train_data_X = all_X[:, :num_train_rows]  # shape n x m_train
-test_data_X = all_X[:, num_train_rows:]  # shape n x m_test
+# remove useless columns
+del train_data["Unnamed: 0"]
+del train_data["GameID"]
+del train_data["LeagueIndex"]
+del test_data["Unnamed: 0"]
+del test_data["GameID"]
+del test_data["LeagueIndex"]
 
-binary_model([train_data_X.shape[0], 15, 10, 1], train_data_X, train_data_Y, test_data_X, test_data_Y, 30000, 2, True)
+train_data_X = np.array(train_data)
+test_data_X = np.array(test_data)
+
+# scale data
+scaler = StandardScaler()
+train_data_X = scaler.fit_transform(train_data_X)
+test_data_X = scaler.transform(test_data_X)
+
+train_data_X = train_data_X.T  # shape n x m_train
+test_data_X = test_data_X.T  # shape n x m_test
+
+binary_model([train_data_X.shape[0], 15, 10, 1], train_data_X, train_data_Y, test_data_X, test_data_Y, 20000, 0.5, True)
