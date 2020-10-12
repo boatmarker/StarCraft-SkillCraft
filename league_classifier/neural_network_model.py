@@ -1,7 +1,4 @@
-import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
 
 
 def sigmoid(z):
@@ -212,34 +209,3 @@ def binary_model(layer_dims, train_X, train_Y, test_X, test_Y, num_iterations, l
 
     print(f"Training set prediction accuracy: {100 - np.mean(np.abs(train_Y - Y_prediction_train)) * 100}%")
     print(f"Test set prediction accuracy: {100 - np.mean(np.abs(test_Y - Y_prediction_test)) * 100}%")
-
-
-train_data = pd.read_csv("data/train_rows.csv")
-test_data = pd.read_csv("data/test_rows.csv")
-
-league = 4
-train_data_Y = np.reshape(np.array(train_data["LeagueIndex"]), (1, -1))  # shape 1 x m_train
-train_data_Y = (train_data_Y == league).astype(int)
-test_data_Y = np.reshape(np.array(test_data["LeagueIndex"]), (1, -1))  # shape 1 x m_test
-test_data_Y = (test_data_Y == league).astype(int)
-
-# remove useless columns
-del train_data["Unnamed: 0"]
-del train_data["GameID"]
-del train_data["LeagueIndex"]
-del test_data["Unnamed: 0"]
-del test_data["GameID"]
-del test_data["LeagueIndex"]
-
-train_data_X = np.array(train_data)
-test_data_X = np.array(test_data)
-
-# scale data
-scaler = StandardScaler()
-train_data_X = scaler.fit_transform(train_data_X)
-test_data_X = scaler.transform(test_data_X)
-
-train_data_X = train_data_X.T  # shape n x m_train
-test_data_X = test_data_X.T  # shape n x m_test
-
-binary_model([train_data_X.shape[0], 15, 10, 1], train_data_X, train_data_Y, test_data_X, test_data_Y, 20000, 0.5, True)
