@@ -33,4 +33,4 @@ train_data_X = train_data_X.T  # shape n x m_train
 test_data_X = test_data_X.T  # shape n x m_test
 
 layer_dims = [train_data_X.shape[0], 15, 10, 1]
-nm.binary_model(layer_dims, train_data_X, train_data_Y, test_data_X, test_data_Y, 10000, 0.5, 0.05, True)
+nm.binary_model(layer_dims, train_data_X, train_data_Y, test_data_X, test_data_Y, 5000, 0.3, 3, True)

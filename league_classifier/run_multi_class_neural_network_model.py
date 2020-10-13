@@ -30,4 +30,4 @@ test_data_X = test_data_X.T  # shape n x m_test
 
 layer_dims = [train_data_X.shape[0], 15, 10, 1]
 num_leagues = 7
-nm.multi_class_model(layer_dims, num_leagues, train_data_X, train_data_Y, test_data_X, test_data_Y, 20000, 0.5, 0.05, True)
+nm.multi_class_model(layer_dims, num_leagues, train_data_X, train_data_Y, test_data_X, test_data_Y, 5000, 0.3, 3, True)
