@@ -182,6 +182,41 @@ def binary_predict(W_list, b_list, X):
     return Y_prediction
 
 
+def multi_class_predict(W_list_list, b_list_list, X):
+    """
+    :param W_list_list: K
+    :param b_list_list: K
+    :param X: input data, shape n x m
+    :return Y_prediction: predicted labels, shape 1 x m
+    """
+    K = len(W_list_list)
+    m = X.shape[1]
+    A_aggregate = np.zeros((K, m))  # activations from all K classifiers stacked together, shape K x m
+
+    for k in range(K):
+        Z_list, A_list = model_forward(X, W_list_list[k], b_list_list[k])
+        AL = A_list[len(A_list) - 1]
+        A_aggregate[k, :] = AL
+
+    Y_prediction = np.argmax(A_aggregate, axis=0) + 1
+    Y_prediction = np.reshape(Y_prediction, (1, Y_prediction.size))
+
+    return Y_prediction
+
+
+def optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, print_cost=False):
+    for i in range(num_iterations):
+        Z_list, A_list = model_forward(train_X, W_list, b_list)
+        if print_cost and i % 100 == 0:
+            AL = A_list[len(A_list) - 1]
+            print(f"Cost after iteration {i}: {compute_cost(AL, train_Y)}")
+
+        dA_list, dW_list, db_list = model_backward(W_list, Z_list, A_list, train_Y)
+        W_list, b_list = update_parameters(W_list, b_list, dW_list, db_list, learning_rate)
+
+    return W_list, b_list
+
+
 def binary_model(layer_dims, train_X, train_Y, test_X, test_Y, num_iterations, learning_rate, print_cost=False):
     """
     Learn a binary classifier and test its accuracy on the test set.
@@ -195,17 +230,47 @@ def binary_model(layer_dims, train_X, train_Y, test_X, test_Y, num_iterations, l
     :param print_cost: print calculated cost every 100 iterations for tracking progress
     """
     W_list, b_list = initialize_parameters(layer_dims)
-    for i in range(num_iterations):
-        Z_list, A_list = model_forward(train_X, W_list, b_list)
-        if print_cost and i % 100 == 0:
-            AL = A_list[len(A_list) - 1]
-            print(f"Cost after iteration {i}: {compute_cost(AL, train_Y)}")
-
-        dA_list, dW_list, db_list = model_backward(W_list, Z_list, A_list, train_Y)
-        W_list, b_list = update_parameters(W_list, b_list, dW_list, db_list, learning_rate)
+    W_list, b_list = optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, print_cost)
 
     Y_prediction_train = binary_predict(W_list, b_list, train_X)
     Y_prediction_test = binary_predict(W_list, b_list, test_X)
 
     print(f"Training set prediction accuracy: {100 - np.mean(np.abs(train_Y - Y_prediction_train)) * 100}%")
     print(f"Test set prediction accuracy: {100 - np.mean(np.abs(test_Y - Y_prediction_test)) * 100}%")
+
+
+def multi_class_model(layer_dims, num_classes, train_X, train_Y, test_X, test_Y, num_iterations, learning_rate, print_cost=False):
+    """
+    Learn a multi-class classifier and test its accuracy on the test set.
+    :param layer_dims:
+    :param num_classes: number of distinct classes (K)
+    :param train_X: training data, shape n x m_train
+    :param train_Y: training labels (multi-class 1 to K), shape 1 x m_train
+    :param test_X: test data, shape n x m_test
+    :param test_Y: test labels (multi-class 1 to K), shape 1 x m_test
+    :param num_iterations: number of iterations to run gradient descent
+    :param learning_rate: learning rate (alpha)
+    :param print_cost: print calculated cost every 100 iterations for tracking progress
+    """
+    n = train_X.shape[0]
+    m_train = train_X.shape[1]
+    m_test = test_X.shape[1]
+    W_list_list = []  # list of list of weight matrices for all K binary classifiers
+    b_list_list = []  # list of list of bias unit lists for all K binary classifiers
+
+    for k in range(1, num_classes + 1):
+        print(f"Training classifier for league {k}")
+        train_Y_k = (train_Y == k).astype(int)
+        W_list, b_list = initialize_parameters(layer_dims)
+        W_list, b_list = optimize(W_list, b_list, train_X, train_Y_k, num_iterations, learning_rate, print_cost)
+        W_list_list.append(W_list)
+        b_list_list.append(b_list)
+
+    Y_prediction_train = multi_class_predict(W_list_list, b_list_list, train_X)
+    Y_prediction_test = multi_class_predict(W_list_list, b_list_list, test_X)
+
+    print("Predicted Y for test set:")
+    print(Y_prediction_test)
+
+    print(f"Training set prediction accuracy: {sum((Y_prediction_train == train_Y).squeeze().astype(int)) / m_train * 100}%")
+    print(f"Test set prediction accuracy: {sum((Y_prediction_test == test_Y).squeeze().astype(int)) / m_test * 100}%")
