@@ -5,8 +5,16 @@ def sigmoid(z):
     return 1 / (1 + np.exp(-z))
 
 
+def relu(z):
+    return z * (z > 0)
+
+
 def sigmoid_derivative(z):
     return sigmoid(z) * (1 - sigmoid(z))
+
+
+def relu_derivative(z):
+    return (z > 0).astype(int)
 
 
 def initialize_parameters(layer_dims):
@@ -38,13 +46,22 @@ def linear_forward(A_prev, W, b):
     return np.dot(W, A_prev) + b
 
 
-def activation_forward(Z):
+def activation_forward_sigmoid(Z):
     """
-    Compute one activation step A[l] = g[l](Z[l]).
+    Compute one activation step A[l] = g[l](Z[l]) using sigmoid function.
     :param Z: input to the activation function for the current layer, shape layer_dims[l] x m
     :return A: activation matrix for the current layer, shape layer_dims[l] x m
     """
     return sigmoid(Z)
+
+
+def activation_forward_relu(Z):
+    """
+    Compute one activation step A[l] = g[l](Z[l]) using ReLU function.
+    :param Z: input to the activation function for the current layer, shape layer_dims[l] x m
+    :return A: activation matrix for the current layer, shape layer_dims[l] x m
+    """
+    return relu(Z)
 
 
 def model_forward(X, W_list, b_list):
@@ -66,7 +83,10 @@ def model_forward(X, W_list, b_list):
         b = b_list[l]
         Z = linear_forward(A_prev, W, b)
         Z_list.append(Z)
-        A = activation_forward(Z)
+        if l < L - 1:
+            A = activation_forward_relu(Z)
+        else:
+            A = activation_forward_sigmoid(Z)
         A_list.append(A)
 
     return Z_list, A_list
@@ -113,7 +133,7 @@ def linear_backward(dZ, A_prev, W, lambd):
     return dW, db, dA_prev
 
 
-def activation_backward(dA, Z):
+def activation_backward_sigmoid(dA, Z):
     """
 
     :param dA:
@@ -121,6 +141,16 @@ def activation_backward(dA, Z):
     :return dZ:
     """
     return dA * sigmoid_derivative(Z)
+
+
+def activation_backward_relu(dA, Z):
+    """
+
+    :param dA:
+    :param Z:
+    :return dZ:
+    """
+    return dA * relu_derivative(Z)
 
 
 def model_backward(W_list, Z_list, A_list, Y, lambd):
@@ -136,7 +166,6 @@ def model_backward(W_list, Z_list, A_list, Y, lambd):
     :return db_list: L
     """
     L = len(W_list)
-
     A = A_list[L]
 
     # to prevent divide by 0 errors
@@ -152,7 +181,10 @@ def model_backward(W_list, Z_list, A_list, Y, lambd):
         Z = Z_list[l]
         W = W_list[l]
         A_prev = A_list[l]
-        dZ = activation_backward(dA, Z)
+        if l < L - 1:
+            dZ = activation_backward_relu(dA, Z)
+        else:
+            dZ = activation_backward_sigmoid(dA, Z)
         dW, db, dA_prev = linear_backward(dZ, A_prev, W, lambd)
         dA_list.insert(0, dA_prev)
         dW_list.insert(0, dW)
