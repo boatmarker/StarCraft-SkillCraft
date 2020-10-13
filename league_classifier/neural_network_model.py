@@ -9,6 +9,11 @@ def relu(z):
     return z * (z > 0)
 
 
+def softmax(z):
+    exps = np.exp(z)
+    return exps / np.sum(exps, axis=0, keepdims=True)
+
+
 def sigmoid_derivative(z):
     return sigmoid(z) * (1 - sigmoid(z))
 
@@ -64,7 +69,16 @@ def activation_forward_relu(Z):
     return relu(Z)
 
 
-def model_forward(X, W_list, b_list):
+def activation_forward_softmax(Z):
+    """
+    Compute one activation step A[l] = g[l](Z[l]) using softmax function.
+    :param Z: input to the activation function for the current layer, shape layer_dims[l] x m
+    :return A: activation matrix for the current layer, shape layer_dims[l] x m
+    """
+    return softmax(Z)
+
+
+def binary_model_forward(X, W_list, b_list):
     """
     Forward propagation calculations.
     :param X: input data, shape layer_dims[0] x m
@@ -92,7 +106,35 @@ def model_forward(X, W_list, b_list):
     return Z_list, A_list
 
 
-def compute_cost(AL, Y, W_list, lambd):
+def multi_class_model_forward(X, W_list, b_list):
+    """
+    Forward propagation calculations.
+    :param X: input data, shape layer_dims[0] x m
+    :param W_list: list of L weights matrices, starting with layer 1 (first hidden layer), W for lth layer is shaped layer_dims[l] x layer_dims[l-1]
+    :param b_list: list of L bias vectors, starting with layer 1, b for lth layer is shaped layer_dims[l] x 1
+    :return Z_list: list of L inputs to activation functions, starting with layer 1, Z for lth layer is shaped layer_dims[l] x m
+    :return A_list: list of L+1 activation matrices, starting with the input layer, A for lth layer is shaped layer_dims[l] x m
+    """
+    L = len(W_list)
+    A = X
+    Z_list = []
+    A_list = [A]
+    for l in range(L):
+        A_prev = A
+        W = W_list[l]
+        b = b_list[l]
+        Z = linear_forward(A_prev, W, b)
+        Z_list.append(Z)
+        if l < L - 1:
+            A = activation_forward_relu(Z)
+        else:
+            A = activation_forward_softmax(Z)
+        A_list.append(A)
+
+    return Z_list, A_list
+
+
+def binary_compute_cost(AL, Y, W_list, lambd):
     """
     Compute the cost from the activation matrix from the Lth layer.
     :param AL: activation matrix for the output layer, shape layer_dims[L] x m = 1 x m for binary classification
@@ -109,6 +151,28 @@ def compute_cost(AL, Y, W_list, lambd):
     AL[AL == 1] = 1 - epsilon
 
     cross_entropy_cost = -1/m * np.sum(Y * np.log(AL) + (1 - Y) * np.log(1 - AL)).squeeze()
+    L2_regularization_cost = lambd / (2 * m) * sum(np.sum(np.square(W)).squeeze() for W in W_list)
+
+    return cross_entropy_cost + L2_regularization_cost
+
+
+def multi_class_compute_cost(AL, Y, W_list, lambd):
+    """
+    Compute the cost from the activation matrix from the Lth layer.
+    :param AL: activation matrix for the output layer, shape layer_dims[L] x m
+    :param Y: labels, shape layer_dims[L] x m
+    :param W_list:
+    :param lambd:
+    :return cost: cost
+    """
+    m = Y.shape[1]
+
+    # to prevent log(0) errors
+    epsilon = 1e-8
+    AL[AL == 0] = epsilon
+    AL[AL == 1] = 1 - epsilon
+
+    cross_entropy_cost = -1/m * np.sum(Y * np.log(AL)).squeeze()
     L2_regularization_cost = lambd / (2 * m) * sum(np.sum(np.square(W)).squeeze() for W in W_list)
 
     return cross_entropy_cost + L2_regularization_cost
@@ -153,7 +217,7 @@ def activation_backward_relu(dA, Z):
     return dA * relu_derivative(Z)
 
 
-def model_backward(W_list, Z_list, A_list, Y, lambd):
+def binary_model_backward(W_list, Z_list, A_list, Y, lambd):
     """
 
     :param W_list: L
@@ -194,6 +258,45 @@ def model_backward(W_list, Z_list, A_list, Y, lambd):
     return dA_list, dW_list, db_list
 
 
+def multi_class_model_backward(W_list, Z_list, A_list, Y, lambd):
+    """
+
+    :param W_list: L
+    :param Z_list: L
+    :param A_list: L+1
+    :param Y: K x m
+    :param lambd:
+    :return dA_list: L, does not include dA of output layer
+    :return dW_list: L
+    :return db_list: L
+    """
+    L = len(W_list)
+
+    AL = A_list[L]
+
+    WL = W_list[L-1]
+    A_prev = A_list[L-1]
+    dZ = AL - Y
+    dW, db, dA_prev = linear_backward(dZ, A_prev, WL, lambd)
+    dA_list = [dA_prev]
+    dW_list = [dW]
+    db_list = [db]
+    dA = dA_prev
+
+    for l in range(L - 2, -1, -1):
+        Z = Z_list[l]
+        W = W_list[l]
+        A_prev = A_list[l]
+        dZ = activation_backward_relu(dA, Z)
+        dW, db, dA_prev = linear_backward(dZ, A_prev, W, lambd)
+        dA_list.insert(0, dA_prev)
+        dW_list.insert(0, dW)
+        db_list.insert(0, db)
+        dA = dA_prev
+
+    return dA_list, dW_list, db_list
+
+
 def update_parameters(W_list, b_list, dW_list, db_list, learning_rate):
     """
 
@@ -220,43 +323,50 @@ def binary_predict(W_list, b_list, X):
     :param X: input data
     :return Y_prediction: predicted labels
     """
-    Z_list, A_list = model_forward(X, W_list, b_list)
+    Z_list, A_list = binary_model_forward(X, W_list, b_list)
     AL = A_list[len(A_list) - 1]
     Y_prediction = (AL > 0.5).astype(int)
 
     return Y_prediction
 
 
-def multi_class_predict(W_list_list, b_list_list, X):
+def multi_class_predict(W_list, b_list, X):
     """
-    :param W_list_list: K
-    :param b_list_list: K
+    :param W_list: L
+    :param b_list: L
     :param X: input data, shape n x m
-    :return Y_prediction: predicted labels, shape 1 x m
+    :return Y_prediction: predicted labels, 1 x m
     """
-    K = len(W_list_list)
-    m = X.shape[1]
-    A_aggregate = np.zeros((K, m))  # activations from all K classifiers stacked together, shape K x m
+    Z_list, A_list = multi_class_model_forward(X, W_list, b_list)
+    AL = A_list[len(A_list) - 1]
 
-    for k in range(K):
-        Z_list, A_list = model_forward(X, W_list_list[k], b_list_list[k])
-        AL = A_list[len(A_list) - 1]
-        A_aggregate[k, :] = AL
-
-    Y_prediction = np.argmax(A_aggregate, axis=0) + 1
+    Y_prediction = np.argmax(AL, axis=0) + 1
     Y_prediction = np.reshape(Y_prediction, (1, Y_prediction.size))
 
     return Y_prediction
 
 
-def optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, lambd, print_cost=False):
+def binary_optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, lambd, print_cost=False):
     for i in range(num_iterations):
-        Z_list, A_list = model_forward(train_X, W_list, b_list)
+        Z_list, A_list = binary_model_forward(train_X, W_list, b_list)
         if print_cost and i % 100 == 0:
             AL = A_list[len(A_list) - 1]
-            print(f"Cost after iteration {i}: {compute_cost(AL, train_Y, W_list, lambd)}")
+            print(f"Cost after iteration {i}: {binary_compute_cost(AL, train_Y, W_list, lambd)}")
 
-        dA_list, dW_list, db_list = model_backward(W_list, Z_list, A_list, train_Y, lambd)
+        dA_list, dW_list, db_list = binary_model_backward(W_list, Z_list, A_list, train_Y, lambd)
+        W_list, b_list = update_parameters(W_list, b_list, dW_list, db_list, learning_rate)
+
+    return W_list, b_list
+
+
+def multi_class_optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, lambd, print_cost=False):
+    for i in range(num_iterations):
+        Z_list, A_list = multi_class_model_forward(train_X, W_list, b_list)
+        if print_cost and i % 100 == 0:
+            AL = A_list[len(A_list) - 1]
+            print(f"Cost after iteration {i}: {multi_class_compute_cost(AL, train_Y, W_list, lambd)}")
+
+        dA_list, dW_list, db_list = multi_class_model_backward(W_list, Z_list, A_list, train_Y, lambd)
         W_list, b_list = update_parameters(W_list, b_list, dW_list, db_list, learning_rate)
 
     return W_list, b_list
@@ -276,7 +386,7 @@ def binary_model(layer_dims, train_X, train_Y, test_X, test_Y, num_iterations, l
     :param print_cost: print calculated cost every 100 iterations for tracking progress
     """
     W_list, b_list = initialize_parameters(layer_dims)
-    W_list, b_list = optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, lambd, print_cost)
+    W_list, b_list = binary_optimize(W_list, b_list, train_X, train_Y, num_iterations, learning_rate, lambd, print_cost)
 
     Y_prediction_train = binary_predict(W_list, b_list, train_X)
     Y_prediction_test = binary_predict(W_list, b_list, test_X)
@@ -301,19 +411,16 @@ def multi_class_model(layer_dims, num_classes, train_X, train_Y, test_X, test_Y,
     """
     m_train = train_X.shape[1]
     m_test = test_X.shape[1]
-    W_list_list = []  # list of weight matrix lists for all K binary classifiers
-    b_list_list = []  # list of bias unit lists for all K binary classifiers
 
-    for k in range(1, num_classes + 1):
-        print(f"Training classifier for league {k}")
-        train_Y_k = (train_Y == k).astype(int)
-        W_list, b_list = initialize_parameters(layer_dims)
-        W_list, b_list = optimize(W_list, b_list, train_X, train_Y_k, num_iterations, learning_rate, lambd, print_cost)
-        W_list_list.append(W_list)
-        b_list_list.append(b_list)
+    train_Y_one_hot = np.zeros((num_classes, m_train))
+    for i in range(m_train):
+        train_Y_one_hot[train_Y[0, i] - 1, i] = 1
 
-    Y_prediction_train = multi_class_predict(W_list_list, b_list_list, train_X)
-    Y_prediction_test = multi_class_predict(W_list_list, b_list_list, test_X)
+    W_list, b_list = initialize_parameters(layer_dims)
+    W_list, b_list = multi_class_optimize(W_list, b_list, train_X, train_Y_one_hot, num_iterations, learning_rate, lambd, print_cost)
+
+    Y_prediction_train = multi_class_predict(W_list, b_list, train_X)
+    Y_prediction_test = multi_class_predict(W_list, b_list, test_X)
 
     print("Predicted Y for test set:")
     print(Y_prediction_test)

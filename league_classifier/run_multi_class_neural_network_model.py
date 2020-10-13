@@ -28,6 +28,6 @@ test_data_X = scaler.transform(test_data_X)
 train_data_X = train_data_X.T  # shape n x m_train
 test_data_X = test_data_X.T  # shape n x m_test
 
-layer_dims = [train_data_X.shape[0], 15, 10, 1]
 num_leagues = 7
-nm.multi_class_model(layer_dims, num_leagues, train_data_X, train_data_Y, test_data_X, test_data_Y, 5000, 0.3, 3, True)
+layer_dims = [train_data_X.shape[0], 15, 10, num_leagues]
+nm.multi_class_model(layer_dims, num_leagues, train_data_X, train_data_Y, test_data_X, test_data_Y, 50000, 0.3, 1, True)
